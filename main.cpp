@@ -265,6 +265,58 @@ std::pair<JSONObject, size_t> parse(std::string_view json) {
     return {JSONObject{std::nullptr_t{}}, 0};
 }
 
+std::string dump(const JSONObject& obj, bool isPretty = false, int depth = 0) {
+    const std::string indentUnit = "  "; // 每层缩进两个空格
+    std::string currentIndent = isPretty ? std::string(depth * indentUnit.size(), ' ') : "";
+    std::string nextIndent = isPretty ? std::string((depth + 1) * indentUnit.size(), ' ') : "";
+
+    if (std::holds_alternative<std::nullptr_t>(obj.inner)) {
+        return "null";
+    } else if (std::holds_alternative<int>(obj.inner)) {
+        return std::to_string(std::get<int>(obj.inner));
+    } else if (std::holds_alternative<double>(obj.inner)) {
+        return std::to_string(std::get<double>(obj.inner));
+    } else if (std::holds_alternative<std::string>(obj.inner)) {
+        return std::get<std::string>(obj.inner);
+    } else if (std::holds_alternative<std::vector<JSONObject>>(obj.inner)) {
+        const auto& arr = std::get<std::vector<JSONObject>>(obj.inner);
+        if (arr.empty()) return "[]";
+
+        std::string res = "[";
+        if (isPretty) res += "\n";
+        for (size_t i = 0; i < arr.size(); ++i) {
+            if (isPretty) res += nextIndent;
+            res += dump(arr[i], isPretty, depth + 1);
+            if (i != arr.size() - 1) res += ",";
+            if (isPretty) res += "\n";
+        }
+        if (isPretty) res += currentIndent;
+        res += "]";
+        return res;
+    } else if (std::holds_alternative<std::unordered_map<std::string, JSONObject>>(obj.inner)) {
+        const auto& map = std::get<std::unordered_map<std::string, JSONObject>>(obj.inner);
+        if (map.empty()) return "{}";
+
+        std::string res = "{";
+        if (isPretty) res += "\n";
+        size_t count = 0;
+        for (const auto& [key, val] : map) {
+            if (isPretty) res += nextIndent;
+            res += key + ": ";
+            res += dump(val, isPretty, depth + 1);
+            if (count != map.size() - 1) res += ",";
+            if (isPretty) res += "\n";
+            ++count;
+        }
+        if (isPretty) res += currentIndent;
+        res += "}";
+        return res;
+    } else {
+        return "\"unknown\"";
+    }
+}
+
+
 template <class ...Fs>
 struct overloaded : Fs... {
     using Fs::operator()...;
@@ -274,8 +326,8 @@ template <class ...Fs>
 overloaded(Fs...) -> overloaded<Fs...>;
 
 int main() {
-    // std::string_view str3 = R"JSON({"hello": 3.14, "world": [211, [985, 211], '\x0D', '\u000D', '\U0000000D']})JSON";
-    std::string_view str3 = R"JSON(['\xAD', '\u4E2D', '\uD83D\uDE01', '\U0001F600'])JSON";
+    std::string_view str3 = R"JSON({"hello": 3.14, "world": [211, [985, 211], '\x36', '\u4E2D', '\U0001F600']})JSON";
+    // std::string_view str3 = R"JSON(['\xAD', '\u4E2D', '\uD83D\uDE01', '\U0001F600'])JSON";
     auto [obj, eaten] = parse(str3);
     std::visit(
         overloaded{
@@ -300,5 +352,6 @@ int main() {
         },
         obj.inner
     );
+    print(dump(obj, true));
     return 0;
 }
